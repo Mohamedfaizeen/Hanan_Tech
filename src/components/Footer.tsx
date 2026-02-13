@@ -8,7 +8,7 @@ const Footer = () => (
       <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
         {/* Brand */}
         <div className="space-y-4">
-          <img src={logo} alt="Hanan Technologies" className="h-14 w-auto object-contain brightness-0 invert" />
+          <img src={logo} alt="Hanan Technologies" className="h-14 w-auto object-contain" />
           <p className="text-sm leading-relaxed text-gray-400">
             Premium stamp and printing solutions in Dubai. Quality products for every business need.
           </p>
