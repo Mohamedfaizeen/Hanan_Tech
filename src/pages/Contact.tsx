@@ -4,17 +4,44 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { submitContact } from "@/api/api";   // ← new import
 
 const Contact = () => {
   const { toast } = useToast();
   const [form, setForm] = useState({ name: "", email: "", phone: "", message: "" });
+  const [loading, setLoading] = useState(false);  // ← new
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const text = `Hello Hanan Technologies!\n\n*Contact Form*\n*Name:* ${form.name}\n*Email:* ${form.email}\n*Phone:* ${form.phone}\n*Message:* ${form.message}`;
-    window.open(`https://wa.me/971523613334?text=${encodeURIComponent(text)}`, "_blank");
-    toast({ title: "Redirecting to WhatsApp", description: "Your message is being sent via WhatsApp." });
-    setForm({ name: "", email: "", phone: "", message: "" });
+    setLoading(true);
+
+    try {
+      // 1. Save to MongoDB
+      await submitContact(form);
+
+      // 2. Open WhatsApp (same as before)
+      const text = `Hello Hanan Technologies!\n\n*Contact Form*\n*Name:* ${form.name}\n*Email:* ${form.email}\n*Phone:* ${form.phone}\n*Message:* ${form.message}`;
+      window.open(`https://wa.me/971523613334?text=${encodeURIComponent(text)}`, "_blank");
+
+      toast({
+        title: "Message Sent!",
+        description: "Your message has been saved and sent via WhatsApp.",
+      });
+
+      setForm({ name: "", email: "", phone: "", message: "" });
+
+    } catch (error) {
+      // Even if DB save fails, still open WhatsApp
+      const text = `Hello Hanan Technologies!\n\n*Contact Form*\n*Name:* ${form.name}\n*Email:* ${form.email}\n*Phone:* ${form.phone}\n*Message:* ${form.message}`;
+      window.open(`https://wa.me/971523613334?text=${encodeURIComponent(text)}`, "_blank");
+
+      toast({
+        title: "Redirecting to WhatsApp",
+        description: "Your message is being sent via WhatsApp.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -88,9 +115,14 @@ const Contact = () => {
                 <label className="mb-1.5 block text-sm font-medium">Message</label>
                 <Textarea required rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="How can we help you?" />
               </div>
-              <Button type="submit" size="lg" className="w-full gradient-primary hover:gradient-primary-hover gap-2">
+              <Button
+                type="submit"
+                size="lg"
+                disabled={loading}
+                className="w-full gradient-primary hover:gradient-primary-hover gap-2"
+              >
                 <Send className="h-4 w-4" />
-                Send via WhatsApp
+                {loading ? "Sending..." : "Send via WhatsApp"}
               </Button>
             </form>
           </div>

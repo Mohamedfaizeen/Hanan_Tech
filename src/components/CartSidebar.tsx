@@ -5,29 +5,63 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCart } from "@/contexts/CartContext";
+import { useToast } from "@/hooks/use-toast";   // ← new
+import { submitOrder } from "@/api/api";         // ← new
 
 const CartSidebar = () => {
   const { items, removeFromCart, updateQuantity, isCartOpen, setIsCartOpen, clearCart } = useCart();
+  const { toast } = useToast();                  // ← new
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");  // ← new
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false); // ← new
 
-  const handleWhatsAppOrder = () => {
+  const handleWhatsAppOrder = async () => {
+    setLoading(true);
+
+    // 1. Save order to MongoDB
+    try {
+      await submitOrder({
+        customerName,
+        customerEmail,
+        customerPhone,
+        items: items.map((item) => ({
+          productName: item.name,
+          quantity: item.quantity,
+        })),
+        notes: message,
+      });
+    } catch (error) {
+      // Don't block WhatsApp if DB save fails — just log it
+      console.error("Order save failed:", error);
+    }
+
+    // 2. Open WhatsApp (same as before)
     const productList = items
       .map((item) => `• ${item.name} (${item.model}) × ${item.quantity}`)
       .join("\n");
 
-    const text = `Hello Hanan Technologies!\n\n*New Order Request*\n\n*Customer:* ${customerName}\n*Phone:* ${customerPhone}\n\n*Products:*\n${productList}${message ? `\n\n*Message:* ${message}` : ""}`;
+    const text = `Hello Hanan Technologies!\n\n*New Order Request*\n\n*Customer:* ${customerName}\n*Phone:* ${customerPhone}${customerEmail ? `\n*Email:* ${customerEmail}` : ""}\n\n*Products:*\n${productList}${message ? `\n\n*Message:* ${message}` : ""}`;
 
-    const url = `https://wa.me/971523613334?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank");
+    window.open(`https://wa.me/971523613334?text=${encodeURIComponent(text)}`, "_blank");
+
+    // 3. Show success toast
+    toast({
+      title: "Order placed! 🎉",
+      description: "Your order has been saved and sent via WhatsApp.",
+    });
+
+    // 4. Reset everything
     clearCart();
     setShowOrderForm(false);
     setIsCartOpen(false);
     setCustomerName("");
     setCustomerPhone("");
+    setCustomerEmail("");
     setMessage("");
+    setLoading(false);
   };
 
   return (
@@ -49,20 +83,34 @@ const CartSidebar = () => {
               {items.map((item) => (
                 <div key={item.id} className="flex gap-3 rounded-lg border border-border p-3">
                   <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-accent">
-                    <img src={item.image} alt={item.model} className="h-full w-full object-contain p-1" onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg"; }} />
+                    <img
+                      src={item.image}
+                      alt={item.model}
+                      className="h-full w-full object-contain p-1"
+                      onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg"; }}
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="truncate font-heading text-sm font-semibold">{item.name}</p>
                     <p className="text-xs text-muted-foreground">{item.model}</p>
                     <div className="mt-2 flex items-center gap-2">
-                      <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="flex h-7 w-7 items-center justify-center rounded-md border border-border hover:bg-accent">
+                      <button
+                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        className="flex h-7 w-7 items-center justify-center rounded-md border border-border hover:bg-accent"
+                      >
                         <Minus className="h-3 w-3" />
                       </button>
                       <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="flex h-7 w-7 items-center justify-center rounded-md border border-border hover:bg-accent">
+                      <button
+                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                        className="flex h-7 w-7 items-center justify-center rounded-md border border-border hover:bg-accent"
+                      >
                         <Plus className="h-3 w-3" />
                       </button>
-                      <button onClick={() => removeFromCart(item.id)} className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-destructive hover:bg-destructive/10">
+                      <button
+                        onClick={() => removeFromCart(item.id)}
+                        className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -72,19 +120,45 @@ const CartSidebar = () => {
             </div>
 
             {!showOrderForm ? (
-              <Button onClick={() => setShowOrderForm(true)} className="w-full gradient-primary hover:gradient-primary-hover gap-2">
+              <Button
+                onClick={() => setShowOrderForm(true)}
+                className="w-full gradient-primary hover:gradient-primary-hover gap-2"
+              >
                 <MessageCircle className="h-4 w-4" />
                 Order via WhatsApp
               </Button>
             ) : (
               <div className="space-y-3 border-t border-border pt-4">
                 <h4 className="font-heading font-semibold">Your Details</h4>
-                <Input placeholder="Your name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-                <Input placeholder="Phone number" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
-                <Textarea placeholder="Message (optional)" rows={2} value={message} onChange={(e) => setMessage(e.target.value)} />
-                <Button onClick={handleWhatsAppOrder} disabled={!customerName || !customerPhone} className="w-full gradient-primary hover:gradient-primary-hover gap-2">
+                <Input
+                  placeholder="Your name *"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                />
+                <Input
+                  placeholder="Email address *"           
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                />
+                <Input
+                  placeholder="Phone number *"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                />
+                <Textarea
+                  placeholder="Message (optional)"
+                  rows={2}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                />
+                <Button
+                  onClick={handleWhatsAppOrder}
+                  disabled={!customerName || !customerPhone || !customerEmail || loading}
+                  className="w-full gradient-primary hover:gradient-primary-hover gap-2"
+                >
                   <MessageCircle className="h-4 w-4" />
-                  Send Order via WhatsApp
+                  {loading ? "Placing Order..." : "Send Order via WhatsApp"}
                 </Button>
               </div>
             )}
